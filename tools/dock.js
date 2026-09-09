@@ -278,13 +278,16 @@ const commands = {
     // wrong index map. A probe that cannot tell those two apart is useless, so
     // it asserts brightness itself.
     //
-    // Then it WAITS, because a brightness write wipes the colour frame that
-    // follows it: the device applies LBLIG asynchronously and its render
-    // clobbers anything that arrived in between (see setLedBrightness and
-    // PROTOCOL.md). Measured: 150ms is enough, back to back is not. Without
-    // this the first paint of every led command was silently lost and only
-    // reappeared on a later keepalive tick -- which is precisely the "frames
-    // applied late" ghost that cost us an evening.
+    // Then it WAITS, because a brightness write wipes any colour frame that
+    // arrives just after it: the device applies LBLIG asynchronously and its
+    // render clobbers whatever landed in between (see setLedBrightness and
+    // PROTOCOL.md). Without this the first paint of every led command was
+    // silently lost and only reappeared on a later keepalive tick -- which is
+    // precisely the "frames applied late" ghost that cost us an evening.
+    //
+    // The usual fix is to send the colour first, but this probe cannot: it has
+    // to arm brightness BEFORE it knows what any mode will paint, exactly so a
+    // dark strip can be told apart from a wrong index map. So it waits instead.
     dock.setLedBrightness(Number(flag('led-bright', 60)));
     await sleep(200);
 

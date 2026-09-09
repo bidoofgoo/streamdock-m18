@@ -341,8 +341,18 @@ What it means in practice:
   that changes nothing (`{ force: true }` overrides), because the natural way to write a caller --
   set your brightness, then set your colour -- was silently the broken one. Two callers in this
   repo did exactly that and lost every colour they sent.
-- If brightness and colour must both change, **leave at least 150ms between them**, brightness
-  first.
+- If brightness and colour must both change, **send the colour first**. The render reads the
+  device's own frame buffer, so a colour already sitting in it is picked up rather than
+  overwritten. Nothing is lost and no delay is needed anywhere. VERIFIED 2026-09-09: four
+  colour-then-brightness pairs sent back to back, all four applied.
+  Only if a caller cannot know the colour in advance -- `dock.js led` arms brightness before any
+  mode has painted, deliberately, so a dark strip can be told from a wrong map -- does it need
+  the other order plus a wait. 150ms measured sufficient, 200 used.
+- **Neither order gives one seamless transition.** `SETLB` and `LBLIG` are separate commands
+  applied asynchronously, so the colour and the brightness visibly change a tick apart, whichever
+  goes first. There is no command that sets both. A caller that needs a single clean transition
+  must leave brightness fixed and scale the colours itself -- at the cost of 8-bit quantisation
+  and its own gamma, since the firmware's PWM is finer than what an RGB triple can express.
 - **Re-assert colours only.** `startKeepalive()` re-sends the last `SETLB` frame and no `LBLIG`.
   Pairing them made every tick destroy its own frame. Re-sending a frame the strip already shows
   is not visible: verified 2026-09-09 with a static frame re-sent every 2s, no flicker.

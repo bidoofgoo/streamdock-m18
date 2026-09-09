@@ -371,6 +371,17 @@ export class StreamDock extends EventEmitter {
    * every colour -- which is the obvious way to write it -- would otherwise
    * lose every colour they send. Hence the guard here rather than in the
    * callers.
+   *
+   * WHEN BRIGHTNESS AND COLOUR BOTH CHANGE, SEND THE COLOUR FIRST. The render
+   * reads the device's own frame buffer, so a colour already sitting in it is
+   * picked up rather than overwritten, and nothing is lost with no delay
+   * anywhere. VERIFIED on hardware: four colour-then-brightness pairs sent
+   * back to back, all four applied.
+   *
+   * Either order still shows the two changes a tick apart, because SETLB and
+   * LBLIG are separate commands applied asynchronously and no single command
+   * sets both. A caller that needs one seamless transition has to leave the
+   * brightness alone and scale the colours itself.
    */
   setLedBrightness(value, { force = false } = {}) {
     this.#assertLeds();
@@ -379,6 +390,7 @@ export class StreamDock extends EventEmitter {
     this.ledBrightness = next;
     this.#send(CMD.ledBrightness(this.ledBrightness));
   }
+
 
   /** Sets every LED on the strip to one colour. */
   setLedColor(r, g, b) {

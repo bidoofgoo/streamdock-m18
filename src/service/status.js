@@ -76,10 +76,15 @@ export function paintStatus(dock, state, { port = 5548, leds = true } = {}) {
   });
 
   if (leds && dock.model.hasRgbLed) {
+    // Colour BEFORE brightness. A brightness render reads the device's frame
+    // buffer, so a colour already in it is picked up, while one arriving just
+    // after is wiped. See setLedBrightness. In practice the brightness here
+    // never changes after the first paint and so is skipped entirely, but the
+    // order is what makes that safe rather than lucky.
+    dock.setLedZoneColors('ring', color, { rest: [0, 0, 0] });
     // Dim on purpose: this is a status light, not decoration, and it must not
     // be the brightest thing on someone's desk while they work.
     dock.setLedBrightness(25);
-    dock.setLedZoneColors('ring', color, { rest: [0, 0, 0] });
   }
 }
 

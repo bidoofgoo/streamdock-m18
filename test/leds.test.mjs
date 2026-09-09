@@ -201,6 +201,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   assert.equal(countTag(hid, 'LBLIG'), 2, 'a real change must go out');
   dock.setLedBrightness(41, { force: true });
   assert.equal(countTag(hid, 'LBLIG'), 3, 'force must override the skip');
+  dock.close();
 }
 
 {
