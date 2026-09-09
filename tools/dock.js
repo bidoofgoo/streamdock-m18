@@ -6,6 +6,7 @@
 //
 import { appendFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { StreamDock } from '../src/device/streamdock.js';
 import { calibrationTile, textTile, rotateCanvas, encodeJpeg } from '../src/device/icons.js';
 
@@ -21,7 +22,10 @@ const has = name => argv.includes(`--${name}`);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const hex = n => '0x' + n.toString(16).padStart(2, '0');
 
-const KEY_LOG = new URL('../key-events.log', import.meta.url).pathname;
+// fileURLToPath, not .pathname: on Windows a file: URL's pathname keeps a
+// leading slash ("/e:/Apps/..."), which fs then resolves against the current
+// drive and turns into "e:\e:\Apps\...". Only bites off-POSIX.
+const KEY_LOG = fileURLToPath(new URL('../key-events.log', import.meta.url));
 
 function logKeys(dock) {
   dock.on('key', ev => {
