@@ -527,6 +527,7 @@ Flags:
   --keepalive-leds=off    do not re-assert the LED strip on each poke; use
                           this when investigating the strip itself
   --zone=ring|front|all   which LED group to animate (default ring)
+  --width=4               indices per colour band (led bands)
   --led-bright=60         strip brightness asserted before any LED paint
   --raw                   dump raw input reports
 `);

@@ -12,6 +12,10 @@ Works on macOS and Windows through one code path. No driver install, and on macO
 Monitoring grant, because key events arrive on the vendor HID interface rather than the keyboard
 one.
 
+Three things live here: the **protocol reference**, a **Node driver** that implements it, and
+**`dockd`**, a small daemon that owns the device so apps in any language can share it over a
+socket ([jump to it](#sharing-the-dock-between-apps)).
+
 ## What is in the protocol reference
 
 | | |
@@ -29,13 +33,19 @@ one.
 
 ## Install
 
+Not published to npm. Clone it and install the dependencies:
+
 ```bash
-npm install streamdock-m18
+git clone https://github.com/bidoofgoo/streamdock-m18.git
+cd streamdock-m18
+npm install
 ```
 
 The driver itself (`streamdock.js` + `models.js`) needs only **node-hid**. `@napi-rs/canvas` is an
-optional dependency, used solely by the image helpers and the CLI; you can render key JPEGs any
-way you like.
+optional dependency used for *rendering* key images: the icon helpers, the CLI's labelled tiles,
+and the daemon's `key` command and status screens. Without it you can still push your own JPEGs
+(`setKeyImage`, or the daemon's `keyImage`), so it is only required if you want text rendered for
+you.
 
 ## Usage
 
@@ -79,12 +89,19 @@ npm run dock -- led probe     # map which LED index is on the ring vs the front
 npm run dock -- listen        # log key presses as you press them
 ```
 
-Run `npm run dock` with no arguments for the full list.
+Run `npm run dock` with no arguments for the full list. `npm run dockd` is the daemon, covered
+under [sharing the dock](#sharing-the-dock-between-apps); it holds the device exclusively, so stop
+it before using these probes.
 
-`npm test` checks the LED zone logic against a fake HID handle, with no hardware attached. That is
-as far as automated testing can go here: the device acknowledges nothing it is sent (see
-[PROTOCOL.md](PROTOCOL.md)), so the tests can only prove we build the frame we meant to, never that
-the hardware applied it.
+`npm test` runs three suites with no hardware attached, against a fake HID handle: the LED zone
+logic, the daemon's command vocabulary, and the daemon's client hub (line framing, attach state,
+error replies). The most valuable assertions are the ones guarding the two key numberings, since
+getting those wrong is silent and puts every icon two rows out.
+
+What tests cannot cover here is whether the device *did* what it was told: it acknowledges nothing
+it is sent (see [PROTOCOL.md](PROTOCOL.md)), so they prove we build the bytes we meant to and
+nothing more. Anything about what the panel or the strip actually shows needs a human looking at
+it.
 
 The 24 addressable LEDs are **two physical groups sharing one index space**: indices 0-21 are the
 ring around the unit, and 22-23 are on the front. An animation across all 24 therefore walks off
@@ -104,8 +121,16 @@ If more than one app needs it, that process has to be a daemon and the apps beco
 
 ```bash
 npm run dockd                 # owns the device, listens on 127.0.0.1:5548
-npm run dockd -- --port=6000 --brightness=60 --no-status --quiet
 ```
+
+| Flag | Default | |
+|---|---|---|
+| `--port=5548` | 5548 | listening port, and the single-instance lock |
+| `--host=127.0.0.1` | localhost | bind address. This is not an internet service; think before widening it |
+| `--brightness=80` | 80 | screen brightness applied on connect and on every reconnect |
+| `--keepalive-ms=8000` | 8000 | how often to poke the device; 8s is the verified figure |
+| `--no-status` | off | do not paint the status screen when no app is driving the panel |
+| `--quiet` | off | no logging |
 
 The wire format is **newline-delimited JSON** in both directions, chosen because it needs no
 library in any language; `nc 127.0.0.1 5548` is a usable client, and so is anything that can open
@@ -121,7 +146,7 @@ reply, for matching up responses:
 | Command | Effect |
 |---|---|
 | `{"cmd":"key","index":0,"label":"Rain","color":"#1f2933"}` | render a label tile on a key |
-| `{"cmd":"keyImage","index":0,"jpeg":"<base64>"}` | your own artwork; must be 64x64 JPEG, ≤10240 bytes |
+| `{"cmd":"keyImage","index":0,"jpeg":"<base64>"}` | your own artwork; must be 64x64 JPEG, ≤10240 bytes (see the warning below) |
 | `{"cmd":"clear"}` / `{"cmd":"clear","index":3}` | blank every key, or one |
 | `{"cmd":"brightness","value":80}` | screen brightness, 0-100 |
 | `{"cmd":"led","zone":"ring","color":[0,80,255]}` | set an LED zone: `ring`, `front`, `left`, `bottom`, `right`, `top`, `all` |
@@ -162,8 +187,13 @@ keeps the status screen and vice versa. It resets when the last client disconnec
 unplug (the panel comes back blank, and a stale screen would look like a working app that had
 silently died). `--no-status` turns the whole thing off.
 
-Two things worth knowing before writing a client:
+Three things worth knowing before writing a client:
 
+- **`keyImage` dimensions are not checked, and getting them wrong corrupts OTHER keys.** The daemon
+  verifies that the payload is a JPEG and within the byte budget, because both are cheap to check,
+  but it does not decode the image to measure it. The device blits into a fixed per-key
+  framebuffer, so anything larger than 64x64 overruns into the next key's memory. Resize before
+  sending, or use the `key` command and let the daemon render.
 - **Last writer wins.** Any attached client can write any key, and the daemon does not remember who
   wrote what. If several apps share the dock, have each one `detach` when it is not in focus.
 - **The daemon never repaints for you.** On a `device`/`online` event the panel is blank, and only

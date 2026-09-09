@@ -55,6 +55,13 @@ in [PROTOCOL.md](PROTOCOL.md).
 - The observation that oversized key images overrun into adjacent key framebuffers.
 - The icon rendering helpers and the bring-up CLI (`calibrate`, `sizes`, `rotations`, `fit`),
   which push labelled test tiles so an unknown panel reports its own geometry.
+- The **RGB strip wire protocol** as documented (the vendor ships only declarations plus a
+  precompiled binary), and the measured discovery that its 24 LEDs are two physically separate
+  groups in one index space, with the full ring geometry: origin, direction and per-edge ranges.
+- The observation that `SETLB` frames are sometimes applied tens of seconds late, and that the
+  device acknowledges nothing at all, which is what makes that hard to diagnose.
+- `dockd` and its JSON protocol, which exists because `hidapi` grants exclusive access and several
+  apps therefore cannot share the device without one process owning it.
 
 ## Licence
 

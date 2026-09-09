@@ -133,18 +133,6 @@ an argument shape we did not guess, or it answers somewhere other than the input
 others are untried, and `LMOD` / `COLOR` / `CPOS` / `BGPIC` / `BGCLE` may all change device state,
 so they want a deliberate session rather than a casual poke.
 
-### Output reports are never acknowledged
-
-MEASURED 2026-09-09: 180 `SETLB` frames over 90s, plus `CONNECT`, `LBLIG`, `STP` and `QUCMD`,
-produced **zero input reports**. Input reports arrive only for key presses.
-
-This is the single most awkward fact about the protocol. There is no completion, no error and no
-status, so **a write tells you only that the OS accepted the report**: `hid_write` returned 1025
-bytes in 0.5-3.8ms every single time, including for frames that visibly had not been applied yet.
-Nothing on the host can distinguish an applied frame from a queued or ignored one, and any
-diagnosis of the strip therefore needs a human looking at it. Budget for that when debugging, and
-prefer probes that keep re-sending over probes that paint once.
-
 ### Initialisation
 
 ```
@@ -162,6 +150,16 @@ Some implementations expect an `ACK\0\0OK\0` (`41 43 4b 00 00 4f 4b 00`) input r
 device sends nothing at all** in response to `CONNECT`, `DIS`, `HAN`, `STP`, `LIG` or `CLE`. Code
 that waits for an acknowledgement will hang forever. The `ACK` header does appear, but only as the
 prefix of key press reports.
+
+MEASURED 2026-09-09, to put a number on it: 180 `SETLB` frames over 90s, plus `CONNECT`, `LBLIG`,
+`STP` and `QUCMD`, produced **zero input reports**.
+
+This is the most awkward fact about the protocol, and it shapes how anything here can be debugged.
+There is no completion, no error and no status, so **a write tells you only that the OS accepted
+the report**: `hid_write` returned 1025 bytes in 0.5-3.8ms every single time, including for frames
+that visibly had not been applied yet. Nothing on the host can distinguish an applied frame from a
+queued or ignored one, so diagnosing the display or the strip needs a human looking at the device.
+Budget for that, and prefer probes that keep re-sending over probes that paint once and ask.
 
 ## 6. Key images
 
