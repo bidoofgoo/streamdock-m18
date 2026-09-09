@@ -83,16 +83,26 @@ export class StreamDock extends EventEmitter {
     });
   }
 
-  /** Finds and opens the first supported dock. Throws if none is attached. */
-  static open() {
-    const candidates = HID.devices().filter(d => d.usagePage === VENDOR_USAGE_PAGE && findModel(d.vendorId, d.productId));
+  /**
+   * Finds and opens the first supported dock. Throws if none is attached.
+   *
+   * @param open  how to obtain a device, for tests. Defaults to real hidapi.
+   *   The constructor already takes its handle by injection, which is what
+   *   makes the command tests hardware-free, but watch() reached for HID
+   *   directly and so was the one untestable path in this file -- including
+   *   its double-disconnect guard, which had to be found on hardware because
+   *   nothing could exercise it. Keeping the seam here rather than in watch()
+   *   means watch() needs no test-only parameter of its own.
+   */
+  static open({ list = () => HID.devices(), openPath = path => new HID.HID(path) } = {}) {
+    const candidates = list().filter(d => d.usagePage === VENDOR_USAGE_PAGE && findModel(d.vendorId, d.productId));
     if (candidates.length === 0) {
       const err = new Error('No supported Stream Dock found. Is it plugged in?');
       err.code = 'ENODOCK';
       throw err;
     }
     const info = candidates[0];
-    return new StreamDock(new HID.HID(info.path), findModel(info.vendorId, info.productId));
+    return new StreamDock(openPath(info.path), findModel(info.vendorId, info.productId));
   }
 
   /**
@@ -104,8 +114,11 @@ export class StreamDock extends EventEmitter {
    *
    * Never throws for a device that is absent or busy; it keeps polling and
    * reports each new reason once through onError.
+   *
+   * `hid` is passed straight to open(), so a test can drive this whole loop
+   * with a fake device and no hardware.
    */
-  static watch(onConnect, { pollMs = 1000, onLost, onError } = {}) {
+  static watch(onConnect, { pollMs = 1000, onLost, onError, hid } = {}) {
     let current = null;
     let stopped = false;
     let lastOpenError = null;
@@ -113,7 +126,7 @@ export class StreamDock extends EventEmitter {
     const tick = () => {
       if (stopped || current) return;
       try {
-        current = StreamDock.open();
+        current = StreamDock.open(hid);
       } catch (err) {
         // Every failure here is worth retrying rather than fatal. The dock may
         // not be plugged in yet, or another process may still hold it open;

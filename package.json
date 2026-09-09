@@ -30,7 +30,7 @@
   "scripts": {
     "dock": "node tools/dock.js",
     "dockd": "node tools/dockd.js",
-    "test": "node test/leds.test.mjs && node test/commands.test.mjs && node test/hub.test.mjs"
+    "test": "node test/leds.test.mjs && node test/commands.test.mjs && node test/hub.test.mjs && node test/watch.test.mjs"
   },
   "dependencies": {
     "node-hid": "^3.2.0"
