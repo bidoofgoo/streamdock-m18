@@ -104,6 +104,7 @@ If more than one app needs it, that process has to be a daemon and the apps beco
 
 ```bash
 npm run dockd                 # owns the device, listens on 127.0.0.1:5548
+npm run dockd -- --port=6000 --brightness=60 --no-status --quiet
 ```
 
 The wire format is **newline-delimited JSON** in both directions, chosen because it needs no
@@ -140,6 +141,26 @@ reply, for matching up responses:
 | `{"type":"device","state":"online",...}` | the dock appeared, or came back after an unplug. **Repaint your keys.** |
 | `{"type":"device","state":"offline","reason":"..."}` | the dock went away |
 | `{"type":"ok","id":7}` / `{"type":"error","id":7,"message":"..."}` | reply to a command |
+
+### The dock explains itself
+
+With no app connected, the daemon paints a status screen rather than leaving the panel blank,
+because a blank panel is ambiguous: daemon not running, dock unplugged, app not connected, app
+connected but silent, or app crashed mid-paint all look identical.
+
+| State | Screen | Ring |
+|---|---|---|
+| no client connected | `waiting` `for` `an app` / `on port` `5548` | dim amber |
+| client connected, nothing painted yet | `waiting` `for` `input` / `app` `connected` | dim blue |
+| client has painted | whatever the app drew; the daemon stops touching it | the app's |
+
+One word per key, reading left to right from the top-left key, because a 64x64 key holds about one
+short word legibly.
+
+Ownership is tracked separately for the screen and the strip, so an app that only drives the LEDs
+keeps the status screen and vice versa. It resets when the last client disconnects, and after an
+unplug (the panel comes back blank, and a stale screen would look like a working app that had
+silently died). `--no-status` turns the whole thing off.
 
 Two things worth knowing before writing a client:
 

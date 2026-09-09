@@ -18,6 +18,7 @@ import net from 'node:net';
 import { StreamDock } from '../src/device/streamdock.js';
 import { describe } from '../src/service/commands.js';
 import { createHub } from '../src/service/hub.js';
+import { paintStatus } from '../src/service/status.js';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -30,14 +31,52 @@ const HOST = flag('host', '127.0.0.1');       // localhost only; this is not an 
 const BRIGHTNESS = Number(flag('brightness', 80));
 const KEEPALIVE_MS = Number(flag('keepalive-ms', 8000));
 const QUIET = argv.includes('--quiet');
+const STATUS = !argv.includes('--no-status');
 
 const log = (...args) => { if (!QUIET) console.log(...args); };
 
 let dock = null;              // the live device, or null while it is away
 
+// Who owns what. The daemon shows a status screen while nothing else is using
+// the panel, and gets out of the way the moment a client paints. Screen and
+// strip are tracked separately so an app that only drives the LEDs keeps the
+// helpful screen, and vice versa.
+const owned = { screen: false, strip: false };
+
+const SCREEN_COMMANDS = new Set(['key', 'keyImage', 'clear', 'brightness']);
+const STRIP_COMMANDS = new Set(['led', 'ledFrame', 'ledBrightness', 'ledOff']);
+
+/** Repaints the status screen, if the daemon still owns anything to paint on. */
+function showStatus(state) {
+  if (!STATUS || !dock || owned.screen) return;
+  try {
+    paintStatus(dock, state, { port: PORT, leds: !owned.strip });
+  } catch (err) {
+    // Never let a status screen take the daemon down: it is a convenience, and
+    // rendering needs the optional canvas dependency.
+    log(`could not paint status screen: ${err.message}`);
+  }
+}
+
 // All client bookkeeping lives in the hub, which knows nothing about sockets
 // and is therefore testable. This file is left with just the wiring.
-const hub = createHub({ getDock: () => dock, log });
+const hub = createHub({
+  getDock: () => dock,
+  log,
+  onApplied: message => {
+    if (SCREEN_COMMANDS.has(message.cmd)) owned.screen = true;
+    if (STRIP_COMMANDS.has(message.cmd)) owned.strip = true;
+  },
+  onClients: count => {
+    if (count > 0) { showStatus('ready'); return; }
+    // The last client left, so nothing is driving the panel any more and the
+    // daemon takes it back. Their artwork is still on the keys otherwise, which
+    // would look like a working app that has silently died.
+    owned.screen = false;
+    owned.strip = false;
+    showStatus('waiting');
+  },
+});
 const broadcast = hub.broadcast;
 
 // --- the device ----------------------------------------------------------
@@ -55,6 +94,12 @@ const watchForDock = () => StreamDock.watch(connected => {
   connected.connect();
   connected.setBrightness(BRIGHTNESS);
   connected.startKeepalive('brightness', KEEPALIVE_MS);
+
+  // A reconnect blanks the panel, so whatever a client had painted is gone;
+  // ownership resets and the daemon says what is going on until they repaint.
+  owned.screen = false;
+  owned.strip = false;
+  showStatus(hub.size > 0 ? 'ready' : 'waiting');
 
   connected.on('key', ev => broadcast({ type: 'key', index: ev.index, state: ev.state, aux: !!ev.aux }));
 

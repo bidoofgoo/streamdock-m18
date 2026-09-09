@@ -17,7 +17,13 @@ class FakeHid extends EventEmitter {
 const setup = ({ withDock = true } = {}) => {
   const hid = new FakeHid();
   const dock = withDock ? new StreamDock(hid, MODELS.m18) : null;
-  const hub = createHub({ getDock: () => dock });
+  const applied = [];
+  const clientCounts = [];
+  const hub = createHub({
+    getDock: () => dock,
+    onApplied: message => applied.push(message.cmd),
+    onClients: count => clientCounts.push(count),
+  });
   const connect = () => {
     const lines = [];
     const connection = hub.addClient({ write: line => lines.push(JSON.parse(line)) });
@@ -29,7 +35,7 @@ const setup = ({ withDock = true } = {}) => {
       typed: type => lines.filter(l => l.type === type),
     };
   };
-  return { hid, dock, hub, connect };
+  return { hid, dock, hub, connect, applied, clientCounts };
 };
 
 // --- a new client is greeted with the device description -----------------
@@ -148,6 +154,38 @@ const setup = ({ withDock = true } = {}) => {
   assert.equal(hub.size, 0);
   hub.broadcast({ type: 'key', index: 0, state: 1, aux: false });
   assert.equal(client.typed('key').length, 0);
+}
+
+// --- the hooks the status screen depends on ------------------------------
+
+{
+  // The daemon shows a status screen while nothing else drives the panel, and
+  // must hand over the instant a client paints. That depends entirely on these
+  // two callbacks firing at the right moments.
+  const { connect, applied, clientCounts } = setup();
+  assert.deepEqual(clientCounts, [], 'no clients yet');
+  const client = connect();
+  assert.deepEqual(clientCounts, [1], 'connecting reports the new count');
+
+  client.send({ cmd: 'ping' });
+  client.send({ cmd: 'detach' });
+  client.send({ cmd: 'attach' });
+  assert.deepEqual(applied, [], 'ping and attach state are not device commands');
+
+  client.send({ cmd: 'key', index: 0, label: 'mine' });
+  assert.deepEqual(applied, ['key'], 'painting a key must be reported, so the daemon backs off');
+
+  client.send({ cmd: 'led', zone: 'ring', color: [1, 2, 3] });
+  assert.deepEqual(applied, ['key', 'led']);
+
+  client.send({ cmd: 'key', index: 99, label: 'bad' });
+  assert.deepEqual(applied, ['key', 'led'], 'a REJECTED command must not count as taking over');
+
+  const second = connect();
+  assert.deepEqual(clientCounts, [1, 2]);
+  second.remove();
+  client.remove();
+  assert.deepEqual(clientCounts, [1, 2, 1, 0], 'reaching 0 is what triggers taking the panel back');
 }
 
 console.log('daemon hub tests passed');

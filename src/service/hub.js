@@ -14,8 +14,14 @@ import { applyCommand, describe } from './commands.js';
 /**
  * @param getDock  returns the live StreamDock, or null while it is away.
  * @param log      optional; called with human-readable lifecycle lines.
+ * @param onApplied  optional; called with (message) after a client's command
+ *   succeeds. The daemon uses it to notice that a client has taken over the
+ *   panel, so it can stop painting its own status screen over their work.
+ * @param onClients  optional; called with the client count whenever it
+ *   changes, so the daemon can go back to its status screen when the last one
+ *   leaves.
  */
-export function createHub({ getDock, log = () => {} }) {
+export function createHub({ getDock, log = () => {}, onApplied = () => {}, onClients = () => {} }) {
   const clients = new Set();
   let seq = 0;
 
@@ -61,7 +67,9 @@ export function createHub({ getDock, log = () => {} }) {
         send(client, { type: 'error', id, message: 'detached; send {"cmd":"attach"} first' });
         return;
       }
-      send(client, { type: 'ok', id, ...applyCommand(dock, message) });
+      const result = applyCommand(dock, message);
+      onApplied(message);
+      send(client, { type: 'ok', id, ...result });
     } catch (err) {
       // An app under development sends nonsense constantly. Report it and keep
       // the connection: dropping the client would be miserable to debug.
@@ -77,6 +85,7 @@ export function createHub({ getDock, log = () => {} }) {
       const client = { write, attached: true, id: ++seq, buffer: '' };
       clients.add(client);
       log(`client ${client.id} connected (${clients.size} total)`);
+      onClients(clients.size);
 
       const dock = getDock();
       send(client, {
@@ -102,6 +111,7 @@ export function createHub({ getDock, log = () => {} }) {
         remove() {
           clients.delete(client);
           log(`client ${client.id} disconnected (${clients.size} left)`);
+          onClients(clients.size);
         },
       };
     },
