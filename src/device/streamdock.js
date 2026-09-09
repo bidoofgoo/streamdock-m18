@@ -275,10 +275,17 @@ export class StreamDock extends EventEmitter {
     this.#heartbeat.unref?.();
   }
 
-  /** Re-asserts the strip, if we set it and still own it. */
+  /**
+   * Re-asserts the strip, if we set it and still own it.
+   *
+   * Colours only, deliberately. This used to re-send the brightness first,
+   * which meant every keepalive tick wiped the colour frame it sent
+   * immediately afterwards (see setLedBrightness): the strip was fighting
+   * itself once every interval. The device keeps its brightness on its own,
+   * so there is nothing to re-assert.
+   */
   #pokeLeds() {
     if (!this.model.hasRgbLed || !this.#ledFrame) return;
-    if (this.ledBrightness !== null) this.#send(CMD.ledBrightness(this.ledBrightness));
     this.#send(CMD.ledColors(this.#ledFrame.flat()));
   }
 
@@ -343,10 +350,29 @@ export class StreamDock extends EventEmitter {
     if (!this.model.hasRgbLed) throw new Error(`${this.model.name} has no RGB light strip`);
   }
 
-  /** @param value 0-100, same percentage scale as the screen brightness. */
-  setLedBrightness(value) {
+  /**
+   * @param value 0-100, same percentage scale as the screen brightness.
+   * @param force send the report even if the value is unchanged.
+   *
+   * Skips the write when nothing changes, and that is NOT just an
+   * optimisation. VERIFIED on hardware 2026-09-09: the device applies a
+   * brightness change asynchronously, re-rendering the strip from its own
+   * buffer, and that render CLOBBERS any colour frame that arrived in the
+   * meantime. A colour sent right after a brightness write flashes for an
+   * instant and is then wiped. Measured: a 150ms gap between the two is
+   * enough for the colour to survive; back to back is not.
+   *
+   * So a redundant brightness write does not merely waste a report, it
+   * destroys the next colour. Callers that set a constant brightness before
+   * every colour -- which is the obvious way to write it -- would otherwise
+   * lose every colour they send. Hence the guard here rather than in the
+   * callers.
+   */
+  setLedBrightness(value, { force = false } = {}) {
     this.#assertLeds();
-    this.ledBrightness = Math.min(100, Math.max(0, Math.round(value)));
+    const next = Math.min(100, Math.max(0, Math.round(value)));
+    if (!force && next === this.ledBrightness) return;
+    this.ledBrightness = next;
     this.#send(CMD.ledBrightness(this.ledBrightness));
   }
 

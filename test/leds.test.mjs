@@ -167,7 +167,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 }
 
 {
-  // once a frame exists, every tick re-asserts brightness and the frame
+  // Once a frame exists, every tick re-asserts THE FRAME AND NOTHING ELSE.
+  //
+  // This used to assert the opposite, that an LBLIG accompanied every re-sent
+  // frame. That was wrong on hardware: a brightness write is applied
+  // asynchronously and its render wipes any colour frame that arrived just
+  // after it, so pairing the two made each keepalive tick destroy its own
+  // colour. The strip only recovered on a tick where the timing happened to
+  // work out, which is what made a status colour appear seconds late. See
+  // setLedBrightness.
   const { hid, dock } = newDock();
   dock.setLedBrightness(60);
   dock.setLedColors(Array.from({ length: 24 }, () => [3, 2, 1]));
@@ -177,8 +185,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   dock.stopKeepalive();
   const frames = countTag(hid, 'SETLB');
   assert.ok(frames >= 2, `expected the frame re-sent each tick, saw ${frames}`);
-  assert.equal(countTag(hid, 'LBLIG'), frames, 'LBLIG should accompany every re-sent frame');
+  assert.equal(countTag(hid, 'LBLIG'), 0, 'a re-sent frame must NOT be preceded by a brightness write');
   assert.deepEqual(frameOf(hid)[0], [3, 2, 1], 'the re-sent frame must be the retained one');
+}
+
+{
+  // A brightness write that changes nothing must not reach the device, since
+  // it would wipe the next colour frame for no reason.
+  const { hid, dock } = newDock();
+  dock.setLedBrightness(40);
+  assert.equal(countTag(hid, 'LBLIG'), 1, 'the first brightness write must go out');
+  dock.setLedBrightness(40);
+  assert.equal(countTag(hid, 'LBLIG'), 1, 'an unchanged brightness must be skipped');
+  dock.setLedBrightness(41);
+  assert.equal(countTag(hid, 'LBLIG'), 2, 'a real change must go out');
+  dock.setLedBrightness(41, { force: true });
+  assert.equal(countTag(hid, 'LBLIG'), 3, 'force must override the skip');
 }
 
 {
