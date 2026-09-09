@@ -277,7 +277,16 @@ const commands = {
     // The colours were accepted and nothing lit, which reads exactly like a
     // wrong index map. A probe that cannot tell those two apart is useless, so
     // it asserts brightness itself.
+    //
+    // Then it WAITS, because a brightness write wipes the colour frame that
+    // follows it: the device applies LBLIG asynchronously and its render
+    // clobbers anything that arrived in between (see setLedBrightness and
+    // PROTOCOL.md). Measured: 150ms is enough, back to back is not. Without
+    // this the first paint of every led command was silently lost and only
+    // reappeared on a later keepalive tick -- which is precisely the "frames
+    // applied late" ghost that cost us an evening.
     dock.setLedBrightness(Number(flag('led-bright', 60)));
+    await sleep(200);
 
     if (mode === 'one') {
       const index = Number(positional[1]);
@@ -541,11 +550,12 @@ Flags:
                           which command to poke the dock with so it does not
                           revert to its stock screen when idle
   --keepalive-ms=8000     how often to poke; 8s is verified to work
-  --keepalive-leds=off    do not re-assert the LED strip on each poke; use
+  --keepalive-leds=off    do not re-send the LED colours on each poke; use
                           this when investigating the strip itself
   --zone=ring|front|all   which LED group to animate (default ring)
   --width=4               indices per colour band (led bands)
-  --led-bright=60         strip brightness asserted before any LED paint
+  --led-bright=60         strip brightness, asserted 200ms before any LED
+                          paint so it cannot wipe the frame (see PROTOCOL.md)
   --raw                   dump raw input reports
 `);
   process.exit(1);

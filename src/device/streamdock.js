@@ -233,16 +233,20 @@ export class StreamDock extends EventEmitter {
    *                unnecessary now that brightness is known to work.
    *
    * The strip is poked too, when we have a frame to poke it with: the same
-   * tick re-asserts LBLIG and re-sends the last SETLB frame. This is a
-   * MITIGATION, not a fix, and the reasoning is worth knowing before trusting
-   * it. Frames are sometimes applied tens of seconds late (PROTOCOL.md), the
-   * device acknowledges nothing, and the screen has exactly one watchdog-shaped
-   * behaviour that a periodic poke is known to cure. So we give the strip the
-   * same proof of life. If a frame really is being held, re-sending it bounds
-   * how stale the strip can be to one interval; if the cause turns out to be
-   * something else entirely, this costs one ~1ms write per tick and changes
-   * nothing. Pass { leds: false } to leave the strip alone, which is what you
-   * want while investigating the strip itself.
+   * tick re-sends the last SETLB frame, and NOTHING ELSE. It used to re-assert
+   * LBLIG first, which made every tick wipe the frame it sent immediately
+   * afterwards -- see setLedBrightness and PROTOCOL.md. That pairing was also
+   * the whole reason the strip appeared to apply frames "tens of seconds
+   * late": a colour only survived on a tick where the timing happened to work
+   * out, so what looked like a delayed frame was a later tick's copy of it.
+   * The device keeps its own brightness, so there is nothing to re-assert.
+   *
+   * Re-sending the colours is still worth doing: the screen has a
+   * watchdog-shaped revert that a periodic poke demonstrably cures, and the
+   * strip may well have the same. It costs one ~1ms write per tick and
+   * re-sending a frame the strip already shows is not visible. Pass
+   * { leds: false } to leave the strip alone, which is what you want while
+   * investigating the strip itself.
    *
    * Nothing is sent after resetLeds(): the built-in effect owns the strip then
    * and the retained frame is void, so a poke would fight the firmware.

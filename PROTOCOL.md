@@ -293,49 +293,61 @@ Reproduce on another unit with `npm run dock -- led bands`, then `led spread <a>
 band straddles a boundary, and `led corners` to check all four at once; `led probe` walks all 24
 one at a time if the bands are unclear.
 
-### `SETLB` frames are sometimes applied late
+### `LBLIG` wipes the `SETLB` frame that follows it
 
-Observed twice on 2026-09-09, and recorded because it cost several rounds of measurement, not
-because the mechanism is understood. A frame is accepted with no error, the strip does not change,
-and then **seconds to tens of seconds later the frame appears** with nothing further sent. It is a
-delay, not a loss.
+**MECHANISM FOUND 2026-09-09**, replacing an earlier entry here that recorded the symptom as
+"frames are sometimes applied late" and admitted the cause was not understood. It is not a delay
+and not a loss: a brightness write and a colour frame sent back to back **fight each other**.
 
-That single behaviour accounts for a run of confusing observations, all of which looked like
-different bugs at the time:
+The device applies `LBLIG` asynchronously, re-rendering the strip from its own buffer, and that
+render **overwrites any `SETLB` frame that arrived in between**. Send a colour immediately after a
+brightness write and it appears for a fraction of a second and is then wiped.
 
-- a frame that seemed ignored while a later, simpler one seemed to work (the later one was quick;
-  the earlier one arrived after we had stopped looking);
+How it was measured, since nothing on the host can see the strip:
+
+- Six writes alternating method, each a different colour, held 6s, keepalive off so nothing could
+  rescue a lost frame. Colour-only writes all appeared; every brightness-then-colour write
+  vanished. Seen: red, blue, magenta. Not seen: green, yellow, cyan.
+- Then the same with a gap after the brightness: **0ms flashes and is wiped, 150ms survives,
+  500ms survives.** So the colour is genuinely accepted, and it is the brightness render landing
+  afterwards that destroys it.
+
+This one behaviour accounts for the whole run of confusing observations previously listed here,
+all of which looked like separate bugs:
+
+- a frame that seemed ignored while a later, simpler one worked (the simpler one sent no
+  brightness);
 - a mapping that seemed wrong because the ring stayed dark;
+- a colour that appeared "seconds late" with nothing further sent (it was the next keepalive tick
+  re-asserting the frame, on a tick where the timing happened to work out);
 - an unplug and replug that seemed to fix it.
 
-Two earlier explanations are therefore **withdrawn**, and are recorded here only so nobody
-re-derives them: that bursts of back-to-back `SETLB` frames are dropped (disproved by `led chase`,
-which sends 22 frames a pass and has always worked), and that the strip stops accepting per-LED
-frames after a USB bus drop until a physical replug (better explained by the delay).
+**Withdrawn, so nobody re-derives them:**
+
+- That bursts of back-to-back `SETLB` frames are dropped. Disproved by `led chase`, which sends 22
+  frames a pass and has always worked -- it never touches brightness.
+- That the strip stops accepting per-LED frames after a USB bus drop until a physical replug.
+- That the strip has an idle watchdog like the screen's, deprioritising a channel the host has not
+  re-asserted. It fitted the evidence and was wrong. Every "late" frame happened around an idle or
+  freshly reconnected panel because those are exactly the moments something sets brightness.
+- **That you should "assert `LBLIG` before trusting a frame".** This was the advice here before,
+  and it is the direct cause of the symptom it was meant to rule out. Brightness 0 does produce an
+  identical dark ring, so check it -- but check it ONCE, well before the colours, never
+  immediately preceding them.
 
 What it means in practice:
 
-- **A strip that has not changed is not evidence of a wrong index map.** Wait, look again, and
-  only then suspect the mapping.
-- Assert `LBLIG` before trusting a frame at all, since brightness 0 produces the identical
-  symptom for a completely different reason.
-- An interactive probe should keep re-sending or alternating frames rather than painting once and
-  asking a question, so a late frame cannot be mistaken for a wrong one.
-- **Re-assert the strip periodically**, the same way the screen needs `LIG` to stop reverting.
-  `startKeepalive()` re-sends `LBLIG` and the last `SETLB` frame on every tick, which bounds how
-  stale the strip can be to one interval. That is a mitigation for the symptom, chosen because
-  it costs one ~1ms write per tick and cannot make anything worse; it is not a fix, and it is not
-  evidence for any particular mechanism. Re-sending a frame the strip already shows is **not
-  visible**: verified 2026-09-09 with a static frame re-sent every 2s, with no flicker.
-
-The shape of the guess, for whoever gets further than we did: the screen has a watchdog that
-reverts it to the stock display when the host goes quiet, and `LIG` every 8s demonstrably stops
-that. If the strip has a watchdog of the same kind, then a host that never re-asserts the strip
-looks dead on that channel, and the firmware is free to deprioritise or defer it. That would
-explain why every late frame we saw happened around an idle, reverted or freshly reconnected
-panel, and never during 180 consecutive frames with a session actively writing. It remains a
-guess: nothing on the host can observe the strip, so this is a hypothesis that fits, not a
-finding.
+- **Do not re-send a brightness that has not changed.** `setLedBrightness()` now skips a write
+  that changes nothing (`{ force: true }` overrides), because the natural way to write a caller --
+  set your brightness, then set your colour -- was silently the broken one. Two callers in this
+  repo did exactly that and lost every colour they sent.
+- If brightness and colour must both change, **leave at least 150ms between them**, brightness
+  first.
+- **Re-assert colours only.** `startKeepalive()` re-sends the last `SETLB` frame and no `LBLIG`.
+  Pairing them made every tick destroy its own frame. Re-sending a frame the strip already shows
+  is not visible: verified 2026-09-09 with a static frame re-sent every 2s, no flicker.
+- A strip that has not changed is still worth a second look before suspecting the index map, but
+  the first thing to suspect now is a brightness write next to the frame.
 
 ## 9. Two behaviours worth designing around
 
