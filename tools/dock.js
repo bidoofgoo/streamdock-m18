@@ -27,11 +27,24 @@ const hex = n => '0x' + n.toString(16).padStart(2, '0');
 // drive and turns into "e:\e:\Apps\...". Only bites off-POSIX.
 const KEY_LOG = fileURLToPath(new URL('../key-events.log', import.meta.url));
 
+let loggedKeyLogFailure = false;
+
 function logKeys(dock) {
   dock.on('key', ev => {
     const line = `${new Date().toISOString()} rawKey=${hex(ev.keyId)} state=${ev.state} index=${ev.index}${ev.aux ? ' aux' : ''}`;
     console.log('  KEY  ' + line);
-    appendFileSync(KEY_LOG, line + '\n');
+    // Best effort. node-hid re-emits a throw from this handler as a read
+    // error, which the driver then treats as an unplug, so an unwritable log
+    // used to masquerade as the dock vanishing. The console line above is the
+    // record that matters; the file is a convenience.
+    try {
+      appendFileSync(KEY_LOG, line + '\n');
+    } catch (err) {
+      if (!loggedKeyLogFailure) {
+        loggedKeyLogFailure = true;
+        console.error(`  (key log unavailable: ${err.message})`);
+      }
+    }
   });
   dock.on('input', buf => {
     if (has('raw')) console.log('  IN   ' + [...buf.subarray(0, 16)].map(b => b.toString(16).padStart(2, '0')).join(' '));

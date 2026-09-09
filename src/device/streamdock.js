@@ -127,7 +127,13 @@ export class StreamDock extends EventEmitter {
       }
       lastOpenError = null;
       current.on('disconnect', err => {
+        // Guard against a second firing. node-hid can emit 'error' more than
+        // once for the same dead handle (every queued read fails), and each
+        // one emits 'disconnect'. Without this, the second pass read a
+        // null `current` and threw on lost.close(), taking the process down
+        // with a TypeError instead of waiting for the replug.
         const lost = current;
+        if (!lost) return;
         current = null;
         onLost?.(err);
         lost.close();
