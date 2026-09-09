@@ -323,6 +323,21 @@ What it means in practice:
   symptom for a completely different reason.
 - An interactive probe should keep re-sending or alternating frames rather than painting once and
   asking a question, so a late frame cannot be mistaken for a wrong one.
+- **Re-assert the strip periodically**, the same way the screen needs `LIG` to stop reverting.
+  `startKeepalive()` re-sends `LBLIG` and the last `SETLB` frame on every tick, which bounds how
+  stale the strip can be to one interval. That is a mitigation for the symptom, chosen because
+  it costs one ~1ms write per tick and cannot make anything worse; it is not a fix, and it is not
+  evidence for any particular mechanism. Re-sending a frame the strip already shows is **not
+  visible**: verified 2026-09-09 with a static frame re-sent every 2s, with no flicker.
+
+The shape of the guess, for whoever gets further than we did: the screen has a watchdog that
+reverts it to the stock display when the host goes quiet, and `LIG` every 8s demonstrably stops
+that. If the strip has a watchdog of the same kind, then a host that never re-asserts the strip
+looks dead on that channel, and the firmware is free to deprioritise or defer it. That would
+explain why every late frame we saw happened around an idle, reverted or freshly reconnected
+panel, and never during 180 consecutive frames with a session actively writing. It remains a
+guess: nothing on the host can observe the strip, so this is a hypothesis that fits, not a
+finding.
 
 ## 9. Two behaviours worth designing around
 

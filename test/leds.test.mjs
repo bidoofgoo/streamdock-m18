@@ -15,9 +15,22 @@ import { MODELS } from '../src/device/models.js';
 
 class FakeHid extends EventEmitter {
   writes = 0;
-  write(bytes) { this.writes += 1; this.last = Buffer.from(bytes); return bytes.length; }
+  sent = [];
+  write(bytes) {
+    this.writes += 1;
+    this.last = Buffer.from(bytes);
+    this.sent.push(this.last);
+    return bytes.length;
+  }
   close() {}
 }
+
+// Reports are [report id][CRT\0\0][command tag]..., so the tag starts at 6.
+// Counting commands by tag beats counting writes: one call can send several
+// reports (setBrightness sends LIG then STP), which makes raw write counts
+// meaningless as an assertion.
+const tagsSent = hid => hid.sent.map(b => b.subarray(6, 11).toString('latin1'));
+const countTag = (hid, tag) => tagsSent(hid).filter(t => t.startsWith(tag)).length;
 
 // SETLB payload starts after the report ID byte, the 5 byte CRT prefix and
 // the 5 byte command, so the first LED's red byte is at offset 11.
@@ -135,6 +148,62 @@ const newDock = (model = MODELS.m18) => {
   const { dock } = newDock({ ...MODELS.m18, hasRgbLed: false, name: 'no-strip' });
   assert.throws(() => dock.setLedColor(1, 2, 3), /no RGB light strip/);
   assert.throws(() => dock.ledIndices('ring'), /no RGB light strip/);
+}
+
+// --- the keepalive re-asserts the strip, but only when we own a frame -----
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+{
+  // nothing set yet: the strip must not be poked, or we would fight whatever
+  // the firmware is currently showing
+  const { hid, dock } = newDock();
+  dock.startKeepalive('brightness', 25);
+  await sleep(90);
+  dock.stopKeepalive();
+  assert.ok(countTag(hid, 'LIG') >= 2, 'the screen poke should have run at least twice');
+  assert.equal(countTag(hid, 'SETLB'), 0, 'no frame is ours yet, so the strip must be left alone');
+  assert.equal(countTag(hid, 'LBLIG'), 0);
+}
+
+{
+  // once a frame exists, every tick re-asserts brightness and the frame
+  const { hid, dock } = newDock();
+  dock.setLedBrightness(60);
+  dock.setLedColors(Array.from({ length: 24 }, () => [3, 2, 1]));
+  hid.sent = [];
+  dock.startKeepalive('brightness', 25);
+  await sleep(90);
+  dock.stopKeepalive();
+  const frames = countTag(hid, 'SETLB');
+  assert.ok(frames >= 2, `expected the frame re-sent each tick, saw ${frames}`);
+  assert.equal(countTag(hid, 'LBLIG'), frames, 'LBLIG should accompany every re-sent frame');
+  assert.deepEqual(frameOf(hid)[0], [3, 2, 1], 'the re-sent frame must be the retained one');
+}
+
+{
+  // after resetLeds the firmware owns the strip, so the poke must stay quiet
+  const { hid, dock } = newDock();
+  dock.setLedColors(Array.from({ length: 24 }, () => [3, 2, 1]));
+  dock.resetLeds();
+  hid.sent = [];
+  dock.startKeepalive('brightness', 25);
+  await sleep(90);
+  dock.stopKeepalive();
+  assert.equal(countTag(hid, 'SETLB'), 0, 'the strip must not be poked after resetLeds');
+  assert.ok(countTag(hid, 'LIG') >= 2, 'the screen poke should still run');
+}
+
+{
+  // opting out must be honoured
+  const { hid, dock } = newDock();
+  dock.setLedColors(Array.from({ length: 24 }, () => [3, 2, 1]));
+  hid.sent = [];
+  dock.startKeepalive('brightness', 25, { leds: false });
+  await sleep(90);
+  dock.stopKeepalive();
+  assert.equal(countTag(hid, 'SETLB'), 0, 'leds:false must skip the strip');
+  assert.ok(countTag(hid, 'LIG') >= 2, 'the screen poke should still run');
 }
 
 console.log('LED zone tests passed');

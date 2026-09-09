@@ -53,8 +53,9 @@ async function withDock(setup, message) {
     console.log(`connected: ${dock.model.name}`);
     logKeys(dock);
     if (keepalive !== 'none') {
-      dock.startKeepalive(keepalive, keepaliveMs);
-      console.log(`keepalive: ${keepalive} every ${keepaliveMs}ms`);
+      const leds = flag('keepalive-leds', 'on') !== 'off';
+      dock.startKeepalive(keepalive, keepaliveMs, { leds });
+      console.log(`keepalive: ${keepalive} every ${keepaliveMs}ms${leds ? ' (screen + strip)' : ' (screen only)'}`);
     }
     try {
       await setup(dock);
@@ -523,6 +524,8 @@ Flags:
                           which command to poke the dock with so it does not
                           revert to its stock screen when idle
   --keepalive-ms=8000     how often to poke; 8s is verified to work
+  --keepalive-leds=off    do not re-assert the LED strip on each poke; use
+                          this when investigating the strip itself
   --zone=ring|front|all   which LED group to animate (default ring)
   --led-bright=60         strip brightness asserted before any LED paint
   --raw                   dump raw input reports

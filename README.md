@@ -23,6 +23,8 @@ one.
 | LED strip | **24 addressable LEDs**: `LBLIG`, `SETLB`, `DELED`, RGB order |
 | LED layout | **two groups in one index space**: 0-21 ring, 22-23 front |
 | Idle revert | fixed by re-asserting brightness every 8s; no other project does this |
+| No feedback | the device **acknowledges nothing** it is sent; input reports are key presses only |
+| LED timing | frames are sometimes applied **tens of seconds late**; mechanism unknown |
 | Found, unexplored | `LMOD`, `COLOR`, `CPOS`, `BGPIC`, `BGCLE`, `QUCMD` |
 
 ## Install
@@ -44,7 +46,7 @@ import { StreamDock } from 'streamdock-m18';
 StreamDock.watch(dock => {
   dock.connect();
   dock.setBrightness(80);
-  dock.startKeepalive();              // stops the idle revert to the stock screen
+  dock.startKeepalive();              // stops the idle revert, and re-asserts the strip
   dock.setLedColor(40, 70, 160);      // all 24 LEDs
   dock.setLedZoneColors('ring', [40, 70, 160]);  // just the ring, front left as it was
 

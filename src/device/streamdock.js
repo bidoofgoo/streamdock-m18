@@ -65,6 +65,9 @@ export class StreamDock extends EventEmitter {
   /** Last brightness we set, so a keepalive can re-assert it. */
   brightness = 80;
 
+  /** Last LED brightness we set, or null if we never set one. */
+  ledBrightness = null;
+
   constructor(hid, model) {
     super();
     this.#hid = hid;
@@ -223,12 +226,32 @@ export class StreamDock extends EventEmitter {
    *   'connect'    re-runs the session handshake. Strongest and most invasive;
    *                unnecessary now that brightness is known to work.
    *
+   * The strip is poked too, when we have a frame to poke it with: the same
+   * tick re-asserts LBLIG and re-sends the last SETLB frame. This is a
+   * MITIGATION, not a fix, and the reasoning is worth knowing before trusting
+   * it. Frames are sometimes applied tens of seconds late (PROTOCOL.md), the
+   * device acknowledges nothing, and the screen has exactly one watchdog-shaped
+   * behaviour that a periodic poke is known to cure. So we give the strip the
+   * same proof of life. If a frame really is being held, re-sending it bounds
+   * how stale the strip can be to one interval; if the cause turns out to be
+   * something else entirely, this costs one ~1ms write per tick and changes
+   * nothing. Pass { leds: false } to leave the strip alone, which is what you
+   * want while investigating the strip itself.
+   *
+   * Nothing is sent after resetLeds(): the built-in effect owns the strip then
+   * and the retained frame is void, so a poke would fight the firmware.
+   *
+   * VERIFIED 2026-09-09 not to be visible: a static frame re-sent every 2s,
+   * four times faster than the default, showed no flicker or refresh blip on
+   * hardware. That was the one way this could have been worse than the
+   * problem it mitigates.
+   *
    * Note on an earlier false alarm: a device once dropped off the USB bus
    * while a 2s CONNECT heartbeat ran, and this was initially blamed on the
    * heartbeat. It later dropped off again with no heartbeat at all, so the
    * two are unrelated. Reconnection is handled by watch() regardless.
    */
-  startKeepalive(kind = 'brightness', intervalMs = 8000) {
+  startKeepalive(kind = 'brightness', intervalMs = 8000, { leds = true } = {}) {
     this.stopKeepalive();
     const poke = {
       connect: () => this.#send(CMD.connect),
@@ -238,9 +261,19 @@ export class StreamDock extends EventEmitter {
     if (!poke) throw new Error(`unknown keepalive kind "${kind}"`);
 
     this.#heartbeat = setInterval(() => {
-      try { poke(); } catch { this.stopKeepalive(); }
+      try {
+        poke();
+        if (leds) this.#pokeLeds();
+      } catch { this.stopKeepalive(); }
     }, intervalMs);
     this.#heartbeat.unref?.();
+  }
+
+  /** Re-asserts the strip, if we set it and still own it. */
+  #pokeLeds() {
+    if (!this.model.hasRgbLed || !this.#ledFrame) return;
+    if (this.ledBrightness !== null) this.#send(CMD.ledBrightness(this.ledBrightness));
+    this.#send(CMD.ledColors(this.#ledFrame.flat()));
   }
 
   stopKeepalive() {
@@ -307,7 +340,8 @@ export class StreamDock extends EventEmitter {
   /** @param value 0-100, same percentage scale as the screen brightness. */
   setLedBrightness(value) {
     this.#assertLeds();
-    this.#send(CMD.ledBrightness(Math.min(100, Math.max(0, Math.round(value)))));
+    this.ledBrightness = Math.min(100, Math.max(0, Math.round(value)));
+    this.#send(CMD.ledBrightness(this.ledBrightness));
   }
 
   /** Sets every LED on the strip to one colour. */
