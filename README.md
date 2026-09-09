@@ -200,6 +200,25 @@ Three things worth knowing before writing a client:
   your app knows what it wanted there. Bad JSON and bad arguments get an `error` line and keep the
   connection, because an app under development sends nonsense constantly.
 
+### Shipping this inside an app you distribute
+
+The daemon is the right shape for a development machine, and for several apps sharing one dock. It
+is the awkward shape for an app you hand to other people, who will not install Node or clone
+anything. Two ways out, neither free:
+
+| | |
+|---|---|
+| **Bundle the daemon** | Compile it to a single executable (Node's SEA, or `bun build --compile`) and launch it from your app. Reuses everything here, and keeps several apps able to share one dock. Costs ~50MB per platform, `node-hid`'s native `.node` binary has to ship beside the executable, and on macOS an unsigned helper that your app launches is what Gatekeeper objects to. |
+| **Port the driver** | Reimplement the driver in the app's own language and drop the dependency; in Java, `hid4java` ships the native hidapi builds inside its jar. No subprocess, no port, nothing for users to install. Costs a rewrite, and only one process can then own the dock. |
+
+The rewrite is smaller than it sounds, because what makes this device hard is *knowing* about it,
+and that part is written down: the two key numberings, the idle revert, oversized images corrupting
+neighbouring keys, the LED geometry, and the fact that nothing is ever acknowledged. The probes in
+`tools/dock.js` re-verify a fresh implementation against the same hardware.
+
+**Undecided as of 2026-09-09**, deliberately: the daemon stays separate while the only consumer is
+a development machine. Revisit when something actually needs distributing.
+
 ### Bringing up an unknown device
 
 `calibrate`, `sizes`, `rotations` and `fit` are the tools that established this device's geometry,
