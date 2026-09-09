@@ -97,6 +97,58 @@ works alongside `'ring'` and `'front'`. Index 0 is the middle of the left edge a
 counter-clockwise from the front, 11 per half; no LED sits on a corner. `led corners` checks that
 mapping on hardware in one look. See [PROTOCOL.md](PROTOCOL.md) for the per-edge table.
 
+## Sharing the dock between apps
+
+`hidapi` grants **exclusive** access to the HID interface, so only one process can hold the dock.
+If more than one app needs it, that process has to be a daemon and the apps become clients:
+
+```bash
+npm run dockd                 # owns the device, listens on 127.0.0.1:5548
+```
+
+The wire format is **newline-delimited JSON** in both directions, chosen because it needs no
+library in any language; `nc 127.0.0.1 5548` is a usable client, and so is anything that can open
+a TCP socket. Port 5548 is the dock's USB vendor id, and the port doubles as the single-instance
+lock: a second daemon fails to bind and exits rather than fighting for the device.
+
+The daemon owns the two awkward parts, so clients never see them: it re-asserts brightness to stop
+the idle revert, and it re-applies device setup after an unplug.
+
+**Commands** (client to daemon). Add an optional `"id"` to any of them and it comes back on the
+reply, for matching up responses:
+
+| Command | Effect |
+|---|---|
+| `{"cmd":"key","index":0,"label":"Rain","color":"#1f2933"}` | render a label tile on a key |
+| `{"cmd":"keyImage","index":0,"jpeg":"<base64>"}` | your own artwork; must be 64x64 JPEG, ≤10240 bytes |
+| `{"cmd":"clear"}` / `{"cmd":"clear","index":3}` | blank every key, or one |
+| `{"cmd":"brightness","value":80}` | screen brightness, 0-100 |
+| `{"cmd":"led","zone":"ring","color":[0,80,255]}` | set an LED zone: `ring`, `front`, `left`, `bottom`, `right`, `top`, `all` |
+| `{"cmd":"led","zone":"top","color":[255,0,0],"rest":[0,0,0]}` | set a zone and blank everything else |
+| `{"cmd":"ledFrame","colors":[[255,0,0], ...]}` | all 24 LEDs at once, by index |
+| `{"cmd":"ledBrightness","value":60}` | strip brightness, 0-100 |
+| `{"cmd":"ledOff"}` | hand the strip back to its built-in effect |
+| `{"cmd":"detach"}` / `{"cmd":"attach"}` | stop / resume receiving events and writing |
+| `{"cmd":"ping"}` | liveness check |
+
+**Events** (daemon to client), one JSON object per line:
+
+| Event | Meaning |
+|---|---|
+| `{"type":"hello","protocol":1,"state":"online",...}` | sent on connect, with the device description |
+| `{"type":"key","index":3,"state":1,"aux":false}` | key down (`state` 1) or up (`state` 0); index 15-17 are the aux buttons |
+| `{"type":"device","state":"online",...}` | the dock appeared, or came back after an unplug. **Repaint your keys.** |
+| `{"type":"device","state":"offline","reason":"..."}` | the dock went away |
+| `{"type":"ok","id":7}` / `{"type":"error","id":7,"message":"..."}` | reply to a command |
+
+Two things worth knowing before writing a client:
+
+- **Last writer wins.** Any attached client can write any key, and the daemon does not remember who
+  wrote what. If several apps share the dock, have each one `detach` when it is not in focus.
+- **The daemon never repaints for you.** On a `device`/`online` event the panel is blank, and only
+  your app knows what it wanted there. Bad JSON and bad arguments get an `error` line and keep the
+  connection, because an app under development sends nonsense constantly.
+
 ### Bringing up an unknown device
 
 `calibrate`, `sizes`, `rotations` and `fit` are the tools that established this device's geometry,
