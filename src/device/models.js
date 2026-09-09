@@ -97,8 +97,11 @@ export const MODELS = {
     // sequence: they report in exactly this order. Aux index 0/1/2 therefore
     // maps to grid index 15/16/17 as left/middle/right.
     //
-    // Reserved for page switching rather than sounds, so the 15 screen keys
-    // become one page of a much larger board.
+    // They carry NO special meaning here, by decision (2026-09-09): an earlier
+    // note reserved them for page switching, but the app owns them, so they
+    // are plain buttons that report like any other key. Anything that wants
+    // paging can build it on top; nothing in the driver or the daemon claims
+    // them. They have no screen, so they take no images.
     auxKeyIds: [0x25, 0x30, 0x31],
 
     // RGB light strip. The vendor SDK declares hasRGBLed with ledCounts = 24

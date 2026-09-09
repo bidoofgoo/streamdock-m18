@@ -137,7 +137,7 @@ reply, for matching up responses:
 | Event | Meaning |
 |---|---|
 | `{"type":"hello","protocol":1,"state":"online",...}` | sent on connect, with the device description |
-| `{"type":"key","index":3,"state":1,"aux":false}` | key down (`state` 1) or up (`state` 0); index 15-17 are the aux buttons |
+| `{"type":"key","index":3,"state":1,"aux":false}` | key down (`state` 1) or up (`state` 0); index 15-17 are the aux buttons, which are plain buttons with no daemon-level meaning |
 | `{"type":"device","state":"online",...}` | the dock appeared, or came back after an unplug. **Repaint your keys.** |
 | `{"type":"device","state":"offline","reason":"..."}` | the dock went away |
 | `{"type":"ok","id":7}` / `{"type":"error","id":7,"message":"..."}` | reply to a command |
