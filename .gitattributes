@@ -1,0 +1,7 @@
+# Normalise line endings. This repo is developed on macOS and Windows against
+# the same hardware, and without this every file rewritten on one platform
+# shows up as a whole-file diff on the other.
+#
+# LF in the repository, native in the working tree. Nothing here is a shell
+# script or a fixture whose bytes matter, so there is no exception list.
+* text=auto eol=lf

@@ -24,6 +24,7 @@
     "tools",
     "test",
     "PROTOCOL.md",
+    "CLIENTS.md",
     "CREDITS.md"
   ],
   "scripts": {

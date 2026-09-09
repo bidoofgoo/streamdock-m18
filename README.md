@@ -16,6 +16,14 @@ Three things live here: the **protocol reference**, a **Node driver** that imple
 **`dockd`**, a small daemon that owns the device so apps in any language can share it over a
 socket ([jump to it](#sharing-the-dock-between-apps)).
 
+Which document you want:
+
+| | |
+|---|---|
+| **[CLIENTS.md](CLIENTS.md)** | writing an app that drives the dock. The socket API: commands, events, errors, a worked client |
+| **[PROTOCOL.md](PROTOCOL.md)** | writing a driver, or porting to another model. The USB HID wire protocol |
+| this file | installing it, the CLI, and how the pieces fit together |
+
 ## What is in the protocol reference
 
 | | |
@@ -28,7 +36,7 @@ socket ([jump to it](#sharing-the-dock-between-apps)).
 | LED layout | **two groups in one index space**: 0-21 ring, 22-23 front |
 | Idle revert | fixed by re-asserting brightness every 8s; no other project does this |
 | No feedback | the device **acknowledges nothing** it is sent; input reports are key presses only |
-| LED timing | frames are sometimes applied **tens of seconds late**; mechanism unknown |
+| LED timing | a brightness write **wipes the colour frame after it**; send colour first |
 | Found, unexplored | `LMOD`, `COLOR`, `CPOS`, `BGPIC`, `BGCLE`, `QUCMD` |
 
 ## Install
@@ -140,65 +148,15 @@ lock: a second daemon fails to bind and exits rather than fighting for the devic
 The daemon owns the two awkward parts, so clients never see them: it re-asserts brightness to stop
 the idle revert, and it re-applies device setup after an unplug.
 
-**Commands** (client to daemon). Add an optional `"id"` to any of them and it comes back on the
-reply, for matching up responses:
+> **Writing a client? See [CLIENTS.md](CLIENTS.md).** Every command and event, the error messages
+> you will actually hit, a complete worked client, and the five things that will bite you --
+> including two that silently do the wrong thing rather than failing.
 
-| Command | Effect |
-|---|---|
-| `{"cmd":"key","index":0,"label":"Rain","color":"#1f2933"}` | render a label tile on a key |
-| `{"cmd":"keyImage","index":0,"jpeg":"<base64>"}` | your own artwork; must be 64x64 JPEG, ≤10240 bytes (see the warning below) |
-| `{"cmd":"clear"}` / `{"cmd":"clear","index":3}` | blank every key, or one |
-| `{"cmd":"brightness","value":80}` | screen brightness, 0-100 |
-| `{"cmd":"led","zone":"ring","color":[0,80,255]}` | set an LED zone: `ring`, `front`, `left`, `bottom`, `right`, `top`, `all` |
-| `{"cmd":"led","zone":"top","color":[255,0,0],"rest":[0,0,0]}` | set a zone and blank everything else |
-| `{"cmd":"ledFrame","colors":[[255,0,0], ...]}` | all 24 LEDs at once, by index |
-| `{"cmd":"ledBrightness","value":60}` | strip brightness, 0-100 |
-| `{"cmd":"ledOff"}` | hand the strip back to its built-in effect |
-| `{"cmd":"detach"}` / `{"cmd":"attach"}` | stop / resume receiving events and writing |
-| `{"cmd":"ping"}` | liveness check |
-
-**Events** (daemon to client), one JSON object per line:
-
-| Event | Meaning |
-|---|---|
-| `{"type":"hello","protocol":1,"state":"online",...}` | sent on connect, with the device description |
-| `{"type":"key","index":3,"state":1,"aux":false}` | key down (`state` 1) or up (`state` 0); index 15-17 are the aux buttons, which are plain buttons with no daemon-level meaning |
-| `{"type":"device","state":"online",...}` | the dock appeared, or came back after an unplug. **Repaint your keys.** |
-| `{"type":"device","state":"offline","reason":"..."}` | the dock went away |
-| `{"type":"ok","id":7}` / `{"type":"error","id":7,"message":"..."}` | reply to a command |
-
-### The dock explains itself
-
-With no app connected, the daemon paints a status screen rather than leaving the panel blank,
+With no app connected the daemon paints a status screen rather than leaving the panel blank,
 because a blank panel is ambiguous: daemon not running, dock unplugged, app not connected, app
-connected but silent, or app crashed mid-paint all look identical.
-
-| State | Screen | Ring |
-|---|---|---|
-| no client connected | `waiting` `for` `an app` / `on port` `5548` | dim amber |
-| client connected, nothing painted yet | `waiting` `for` `input` / `app` `connected` | dim blue |
-| client has painted | whatever the app drew; the daemon stops touching it | the app's |
-
-One word per key, reading left to right from the top-left key, because a 64x64 key holds about one
-short word legibly.
-
-Ownership is tracked separately for the screen and the strip, so an app that only drives the LEDs
-keeps the status screen and vice versa. It resets when the last client disconnects, and after an
-unplug (the panel comes back blank, and a stale screen would look like a working app that had
-silently died). `--no-status` turns the whole thing off.
-
-Three things worth knowing before writing a client:
-
-- **`keyImage` dimensions are not checked, and getting them wrong corrupts OTHER keys.** The daemon
-  verifies that the payload is a JPEG and within the byte budget, because both are cheap to check,
-  but it does not decode the image to measure it. The device blits into a fixed per-key
-  framebuffer, so anything larger than 64x64 overruns into the next key's memory. Resize before
-  sending, or use the `key` command and let the daemon render.
-- **Last writer wins.** Any attached client can write any key, and the daemon does not remember who
-  wrote what. If several apps share the dock, have each one `detach` when it is not in focus.
-- **The daemon never repaints for you.** On a `device`/`online` event the panel is blank, and only
-  your app knows what it wanted there. Bad JSON and bad arguments get an `error` line and keep the
-  connection, because an app under development sends nonsense constantly.
+connected but silent, or app crashed mid-paint all look identical. Ownership is tracked separately
+for the screen and the strip, so an app that only drives the LEDs keeps the status screen and vice
+versa.
 
 ### Shipping this inside an app you distribute
 

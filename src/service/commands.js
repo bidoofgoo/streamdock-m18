@@ -25,8 +25,21 @@ const rgb = (value, name) => {
   return value.map((c, i) => int(c, `${name}[${i}]`, { min: 0, max: 255 }));
 };
 
-/** Renders a label tile for one key, at the model's size and rotation. */
-function labelJpeg(dock, { label = '', color, textColor }) {
+/**
+ * Renders a label tile for one key, at the model's size and rotation.
+ *
+ * A missing `label` is an ERROR, not an empty tile. It used to default to '',
+ * which meant a client with the field name slightly wrong -- "text" instead of
+ * "label" is the obvious slip -- painted fifteen blank keys and got fifteen
+ * `ok` replies. Silent success is the worst answer an API can give someone
+ * writing their first client against it. An explicit empty string is still
+ * allowed, for a caller that really does want a blank tile, though `clear` is
+ * the better way to say that.
+ */
+function labelJpeg(dock, { label, color, textColor }) {
+  if (label === undefined || label === null) {
+    throw new TypeError('key needs a "label" field (use clear to blank a key)');
+  }
   const tile = textTile(String(label), {
     width: dock.model.keyWidth,
     height: dock.model.keyHeight,

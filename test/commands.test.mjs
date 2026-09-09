@@ -107,6 +107,15 @@ const withTag = (hid, tag) => hid.sent.filter(b => b.subarray(6, 11).toString('l
   assert.throws(() => applyCommand(dock, { cmd: 'led', zone: 'ring', color: [0, 0, 300] }), /must be 0..255/);
   assert.throws(() => applyCommand(dock, { cmd: 'ledFrame', colors: 'red' }), /needs a "colors" array/);
   assert.throws(() => applyCommand(dock, { cmd: 'nonsense' }), /unknown command "nonsense"/);
+
+  // A missing label must fail loudly. It used to default to '', so a client
+  // that named the field wrong painted blank keys and was told everything was
+  // fine -- which is exactly what happened while testing this repo over the
+  // socket, using "text" instead of "label", for fifteen keys and fifteen oks.
+  assert.throws(() => applyCommand(dock, { cmd: 'key', index: 0 }), /needs a "label"/);
+  assert.throws(() => applyCommand(dock, { cmd: 'key', index: 0, text: 'oops' }), /needs a "label"/);
+  // ...but an explicitly empty label is a real request, not a mistake.
+  assert.deepEqual(applyCommand(dock, { cmd: 'key', index: 0, label: '' }), { ok: true });
 }
 
 // --- LED commands reach the strip ----------------------------------------
