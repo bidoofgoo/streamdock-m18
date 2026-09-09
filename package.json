@@ -1,0 +1,39 @@
+{
+  "name": "streamdock-m18",
+  "version": "0.1.0",
+  "description": "Reverse-engineered driver and protocol reference for Mirabox / VSDinside Stream Dock M18 over USB HID",
+  "keywords": [
+    "streamdock",
+    "mirabox",
+    "m18",
+    "stream deck",
+    "hid",
+    "node-hid",
+    "reverse-engineering"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "src/device/streamdock.js",
+  "exports": {
+    ".": "./src/device/streamdock.js",
+    "./models": "./src/device/models.js",
+    "./icons": "./src/device/icons.js"
+  },
+  "files": [
+    "src",
+    "tools",
+    "test",
+    "PROTOCOL.md",
+    "CREDITS.md"
+  ],
+  "scripts": {
+    "dock": "node tools/dock.js",
+    "test": "node test/leds.test.mjs"
+  },
+  "dependencies": {
+    "node-hid": "^3.2.0"
+  },
+  "optionalDependencies": {
+    "@napi-rs/canvas": "^0.1.80"
+  }
+}
