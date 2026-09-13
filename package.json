@@ -1,6 +1,6 @@
 {
   "name": "streamdock-m18",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Reverse-engineered driver and protocol reference for Mirabox / VSDinside Stream Dock M18 over USB HID",
   "keywords": [
     "streamdock",

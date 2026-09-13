@@ -162,7 +162,7 @@ mid-paint all look identical.
 
 | State | Screen | Ring |
 |---|---|---|
-| no client | `waiting` `for` `an app` / `on port` `5548` | dim amber |
+| no client | `waiting` `for` `a` `client` / `on` `port` `5548` | dim amber |
 | client connected, nothing painted | `waiting` `for` `input` / `app` `connected` | dim blue |
 | client has painted | yours; the daemon stops touching it | yours |
 

@@ -13,6 +13,9 @@
 import { textTile, rotateCanvas, encodeJpeg } from '../device/icons.js';
 
 const INK = {
+  // One colour per row, run edge to edge: a row is a solid band, not a few lit
+  // tiles with dark gaps after them. The hint row keeps its own darker colour,
+  // so the headline reads first and the supporting detail sits under it.
   waiting: { color: '#3a2a12', textColor: '#f0b046' },
   ready: { color: '#12293a', textColor: '#46b4f0' },
   hint: { color: '#101820', textColor: '#5f6f7f' },
@@ -20,10 +23,11 @@ const INK = {
 
 /**
  * A screen is rows of words, one word per key, reading left to right from the
- * top-left key. A 64x64 key holds about one short word legibly, so a sentence
- * spread across the grid reads far better than a paragraph squeezed onto one
- * key. Rows are padded out with blanks, so a short row leaves the rest of its
- * row dark rather than wrapping.
+ * top-left key. A 64x64 key holds one short word legibly, so a sentence spread
+ * across the grid reads far better than a paragraph squeezed onto one key -
+ * which is why every entry here is a single word, never a phrase. Short rows
+ * are padded out with blank keys in the row's own colour, so the band runs the
+ * full width of the panel instead of trailing off into dark keys.
  */
 const SCREENS = {
   // Nothing is connected. The port is the one thing the person standing in
@@ -31,8 +35,8 @@ const SCREENS = {
   waiting: port => ({
     leds: [255, 110, 0],
     rows: [
-      [['waiting', INK.waiting], ['for', INK.waiting], ['an app', INK.waiting]],
-      [['on port', INK.hint], [String(port), INK.hint]],
+      { ink: INK.waiting, words: ['waiting', 'for', 'a', 'client'] },
+      { ink: INK.hint, words: ['on', 'port', String(port)] },
     ],
   }),
 
@@ -42,8 +46,8 @@ const SCREENS = {
   ready: () => ({
     leds: [0, 90, 255],
     rows: [
-      [['waiting', INK.ready], ['for', INK.ready], ['input', INK.ready]],
-      [['app', INK.hint], ['connected', INK.hint]],
+      { ink: INK.ready, words: ['waiting', 'for', 'input'] },
+      { ink: INK.hint, words: ['app', 'connected'] },
     ],
   }),
 };
@@ -66,13 +70,11 @@ export function paintStatus(dock, state, { port = 5548, leds = true } = {}) {
   const { rows, leds: color } = screen(port);
 
   dock.clearAll();
-  rows.forEach((words, row) => {
-    words.forEach(([label, ink], column) => {
+  rows.forEach(({ words, ink }, row) => {
+    for (let column = 0; column < dock.model.keyCols; column += 1) {
       const index = row * dock.model.keyCols + column;
-      if (column < dock.model.keyCols && index < dock.model.keyCount) {
-        paintKey(dock, index, label, ink);
-      }
-    });
+      if (index < dock.model.keyCount) paintKey(dock, index, words[column] ?? '', ink);
+    }
   });
 
   if (leds && dock.model.hasRgbLed) {
