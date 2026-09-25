@@ -133,6 +133,21 @@ an argument shape we did not guess, or it answers somewhere other than the input
 others are untried, and `LMOD` / `COLOR` / `CPOS` / `BGPIC` / `BGCLE` may all change device state,
 so they want a deliberate session rather than a casual poke.
 
+### `MOD`: tried, not useful on the M18
+
+`MOD` (`4d 4f 44 00 00 <0x30+n>`) is not in the vendor table above. A driver for the same
+`5548:1000` id ([stevemurr/streamdock](https://github.com/stevemurr/streamdock)) documents it as a
+mode switch (1 = keyboard, 2 = calc, 3 = software), with keyboard as the boot default. TRIED
+2026-09-25 on the M18:
+
+- `MOD 1` makes the device drop off USB and re-enumerate with the same interfaces, back on its
+  stock screen. After that, keys report nowhere, neither on interface 0 nor as keystrokes on
+  interface 1.
+- `MOD 3` sent to a freshly plugged device does nothing visible. The stock screen stays, and no key
+  reports arrive.
+- A freshly plugged device sends no key reports at all until `DIS > CONNECT`. That handshake, not
+  `MOD`, is what turns reporting on, so the driver does not send `MOD`.
+
 ### Initialisation
 
 ```
@@ -228,6 +243,35 @@ key.
 **Separate press and release events are delivered**, which makes press-and-hold behaviour
 possible. Not all models do this: the 293S fires only on release, and its library fakes a
 press/release pair to compensate.
+
+### One key at a time
+
+> **The firmware reports one key at a time. There is no rollover, and chords are impossible.**
+> While any key is held, every other key is invisible, the three aux buttons included.
+
+VERIFIED 2026-09-25 on hardware with `dock.js listen --raw`:
+
+- **Second key pressed and released while the first is held:** no input report at all, not even
+  after the first is released. It is lost, not queued. Tried across a row (`0x01` + `0x05`), across
+  the grid (`0x01` + `0x0f`) and grid + aux, with the first key held for up to 8s.
+- **Second key still held when the first is released:** it is reported about 40ms after the first
+  one's up, which is a few scan cycles. So the firmware rescans and picks it up, but only once it
+  is the only key down.
+- **A held key sends no repeats**, just one down and one up however long it is held.
+- **Rapid tapping is clean:** 12 taps in under 2s on one key, strictly alternating down/up, with no
+  drops and no bounce. The shortest gap was 40ms. Timestamps land on a 10ms grid, which suggests a
+  10ms scan.
+
+This fits the report format, which has room for exactly one key id. The likely firmware loop is
+"find the first pressed key; report when it changes". It is not something the driver can work
+around, since no report is ever sent for the hidden key.
+
+Also ruled out:
+
+- **The keyboard interface (interface 1).** It sends no keystrokes in normal operation. Nothing
+  appears in a text editor when keys are pressed.
+- **Switching to keyboard mode with `MOD 1`**, in the hope that it behaves like a real keyboard
+  with rollover. It does not: the keys then report nowhere. See `MOD` in §5.
 
 ## 8. The RGB light strip
 

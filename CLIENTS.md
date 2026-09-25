@@ -106,6 +106,13 @@ Daemon to client, one JSON object per line.
 Every press produces a matching release. Verified on hardware across all 18 buttons: no dropped
 edges, no phantom repeats, no stuck keys.
 
+**Only one key is ever down.** The dock's firmware has no rollover. While a key is held, a press on
+any other key is not reported at all, and it is lost rather than queued. The one exception is a key
+still held when the first is released: it arrives then, as a down, about 40ms later. So you will
+never see two keys down at once, and chords or combos cannot be built from simultaneous presses.
+If you need more actions than keys, use a modifier you tap first, pages, or long-press. Holding and
+fast tapping are both reliable. PROTOCOL.md §7 has the measurements.
+
 A `detach`ed client still receives `device` events, because a client that unhooked for focus
 reasons must still learn that the panel went blank. It does not receive `key` events.
 
