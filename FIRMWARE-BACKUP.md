@@ -164,3 +164,8 @@ tool yet, because writing back is untested.
 
 Other M18 variants (`VSD_M18`, `M18E`, `M18V3_C`) use the same SoC and the same updater path, so
 this should work there too. Reports welcome.
+
+## Related
+
+[streamdock-m18-firmware](https://github.com/bidoofgoo/streamdock-m18-firmware) builds firmware
+patches on top of a backup made this way, starting with multi-key rollover.

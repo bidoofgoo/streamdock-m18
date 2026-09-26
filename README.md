@@ -24,6 +24,7 @@ Which document you want:
 | **[CLIENTS.md](CLIENTS.md)** | writing an app that drives the dock. The socket API: commands, events, errors, a worked client |
 | **[PROTOCOL.md](PROTOCOL.md)** | writing a driver, or porting to another model. The USB HID wire protocol |
 | **[FIRMWARE-BACKUP.md](FIRMWARE-BACKUP.md)** | backing up your dock's firmware over USB, before any experiment |
+| **[streamdock-m18-firmware](https://github.com/bidoofgoo/streamdock-m18-firmware)** | separate repo: firmware patches, starting with multi-key rollover (chords). Work in progress |
 | this file | installing it, the CLI, and how the pieces fit together |
 
 ## What is in the protocol reference
