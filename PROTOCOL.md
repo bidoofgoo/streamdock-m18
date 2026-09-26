@@ -263,7 +263,8 @@ press/release pair to compensate.
 
 ### One key at a time
 
-> **The firmware reports one key at a time. There is no rollover, and chords are impossible.**
+> **The stock firmware reports one key at a time. There is no rollover, and chords are
+> impossible** (unless the dock runs the patched firmware, see the end of this section).
 > While any key is held, every other key is invisible, the three aux buttons included.
 
 VERIFIED 2026-09-25 on hardware with `dock.js listen --raw`:
@@ -297,6 +298,25 @@ taken on `V3.VSDM18_HXJDF.02.020`. Reading the key scan in the vendor's public
 So different firmware could report chords. Whether they would be reliable depends on the matrix
 having a diode per key, which the firmware cannot tell us. Without diodes, three keys forming a
 rectangle "ghost" a fourth.
+
+### Patched firmware: rollover
+
+The [streamdock-m18-firmware](https://github.com/bidoofgoo/streamdock-m18-firmware) patch
+replaces that scan on `V3.VSDM18_HXJDF.02.020`. A patched dock reports its version as
+**`V3.VSDM18_HXJDF.02.420`** and sends one event per key that changes, for any number of keys.
+The report format is unchanged, so nothing on the host side needs to change.
+
+VERIFIED 2026-09-26 on hardware, patched unit:
+
+- Up to **11 keys held at once** (8 display keys and all 3 aux buttons), every down and up
+  reported, released in any order.
+- **No ghosting:** rectangle chords such as `0x01` + `0x02` + `0x06` + `0x07` report exactly
+  those four keys, and holding three corners never makes the fourth appear. The M18's matrix has
+  a diode per key.
+- Keys are scanned every 10ms and a change is reported once it reads the same on two scans.
+
+`rolloverSeen` in the driver becomes true as soon as a key goes down while another is held,
+which only patched firmware does.
 
 Also ruled out:
 
