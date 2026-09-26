@@ -1,2 +1,9 @@
 node_modules/
 key-events.log
+
+# personal reverse-engineering notes: device serials, local paths, vendor details
+FIRMWARE-NOTES.md
+
+# firmware dumps are the vendor's code: never commit them
+*.bin
+*.img

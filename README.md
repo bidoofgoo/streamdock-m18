@@ -12,9 +12,10 @@ Works on macOS and Windows through one code path. No driver install, and on macO
 Monitoring grant, because key events arrive on the vendor HID interface rather than the keyboard
 one.
 
-Three things live here: the **protocol reference**, a **Node driver** that implements it, and
+Four things live here: the **protocol reference**, a **Node driver** that implements it,
 **`dockd`**, a small daemon that owns the device so apps in any language can share it over a
-socket ([jump to it](#sharing-the-dock-between-apps)).
+socket ([jump to it](#sharing-the-dock-between-apps)), and a **firmware backup tool** that reads
+the dock's whole flash over USB (Windows only, since it relies on the vendor's upgrade tool).
 
 Which document you want:
 
@@ -22,6 +23,7 @@ Which document you want:
 |---|---|
 | **[CLIENTS.md](CLIENTS.md)** | writing an app that drives the dock. The socket API: commands, events, errors, a worked client |
 | **[PROTOCOL.md](PROTOCOL.md)** | writing a driver, or porting to another model. The USB HID wire protocol |
+| **[FIRMWARE-BACKUP.md](FIRMWARE-BACKUP.md)** | backing up your dock's firmware over USB, before any experiment |
 | this file | installing it, the CLI, and how the pieces fit together |
 
 ## What is in the protocol reference
@@ -37,6 +39,7 @@ Which document you want:
 | Idle revert | fixed by re-asserting brightness every 8s; no other project does this |
 | No feedback | the device **acknowledges nothing** it is sent; input reports are key presses only |
 | LED timing | a brightness write **wipes the colour frame after it**; send colour first |
+| Upgrade mode | **`APPNEW`** reboots into the SoC's upgrade mode; how the firmware backup works |
 | Found, unexplored | `LMOD`, `COLOR`, `CPOS`, `BGPIC`, `BGCLE`, `QUCMD` |
 
 ## Install
@@ -101,9 +104,16 @@ Run `npm run dock` with no arguments for the full list. `npm run dockd` is the d
 under [sharing the dock](#sharing-the-dock-between-apps); it holds the device exclusively, so stop
 it before using these probes.
 
-`npm test` runs three suites with no hardware attached, against a fake HID handle: the LED zone
-logic, the daemon's command vocabulary, and the daemon's client hub (line framing, attach state,
-error replies). The most valuable assertions are the ones guarding the two key numberings, since
+```bash
+npm run firmware-backup -- my-m18.bin --twice   # full 16 MB flash backup, read-only
+```
+
+Read [FIRMWARE-BACKUP.md](FIRMWARE-BACKUP.md) before running it. It puts the dock into its
+bootloader's upgrade mode, needs VSD Craft installed, and runs on Windows only.
+
+`npm test` runs four suites with no hardware attached, against a fake HID handle: the LED zone
+logic, the daemon's command vocabulary, the daemon's client hub (line framing, attach state,
+error replies), and the reconnect loop. The most valuable assertions are the ones guarding the two key numberings, since
 getting those wrong is silent and puts every icon two rows out.
 
 What tests cannot cover here is whether the device *did* what it was told: it acknowledges nothing

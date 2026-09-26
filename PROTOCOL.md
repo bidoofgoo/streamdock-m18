@@ -22,6 +22,10 @@ The unit this was written against reports:
 | USB product string | `HOTSPOTEKUSB HID DEMO` |
 | VID:PID | `0x5548:0x1000` |
 | Layout | 15 LCD keys (3 rows x 5 cols) + 3 plain buttons |
+| Firmware | `V3.VSDM18_HXJDF.02.020`, as shown by the vendor's VSD Craft app |
+
+All measurements in this document were taken on that firmware version. Other versions may behave
+differently. On 2026-09-26 the vendor app reported it as the latest version available.
 
 **This VID/PID pair appears nowhere in Mirabox's own SDK.** PID `0x1000` is listed there as
 `N1EN`, but against VID `0x6603`, and the N1 is a 20-key device with rotary encoders. So this is
@@ -118,6 +122,18 @@ All are preceded by the `CRT\0\0` prefix.
 | `LBLIG` | `4c 42 4c 49 47` | 1 byte | **LED strip brightness**, 0-100 |
 | `SETLB` | `53 45 54 4c 42` | 3 bytes per LED | **LED strip colours** |
 | `DELED` | `44 45 4c 45 44` | none | **reset LED strip** |
+| `APPNEW` | `41 50 50 4e 45 57` | none | **reboot into the bootloader's upgrade mode**, see below |
+
+### `APPNEW`: reboot into upgrade mode
+
+VERIFIED 2026-09-26 on hardware. The dock drops off the bus and within a few seconds comes back
+as a different device, **`0x33C3:0x8899`**. That is the HID upgrade mode of the ArtInChip D13x
+SoC inside. Nothing is written to flash. The firmware only records a reboot reason and resets,
+and a plain unplug and replug boots the normal firmware again.
+
+This is the command the vendor's firmware updater sends before flashing. In upgrade mode the dock
+speaks ArtInChip's upgrade protocol, not this one. [FIRMWARE-BACKUP.md](FIRMWARE-BACKUP.md)
+uses it to read the whole flash.
 
 ### Commands seen but not explored
 
@@ -262,9 +278,24 @@ VERIFIED 2026-09-25 on hardware with `dock.js listen --raw`:
   drops and no bounce. The shortest gap was 40ms. Timestamps land on a 10ms grid, which suggests a
   10ms scan.
 
-This fits the report format, which has room for exactly one key id. The likely firmware loop is
-"find the first pressed key; report when it changes". It is not something the driver can work
-around, since no report is ever sent for the hidden key.
+This fits the report format, which has room for exactly one key id. It is not something the
+driver can work around, since no report is ever sent for the hidden key.
+
+**It is a property of the stock firmware, not of the hardware.** The measurements above were
+taken on `V3.VSDM18_HXJDF.02.020`. Reading the key scan in the vendor's public
+`V3.VSDM18.02.015` image confirms the mechanism, and it is stricter than "report the first key":
+
+- The 15 display keys are a **3 x 5 matrix**, scanned one row at a time by a dedicated thread
+  every 30ms.
+- As soon as a row shows a pressed key, **the scan waits on that key until it is released**,
+  rechecking every 10ms, before it looks at anything else. Keys pressed meanwhile are never
+  scanned, which is why they are lost rather than queued. The 10ms recheck matches the 10ms grid
+  in the timestamps.
+- The column decode only recognises one pressed column per row.
+
+So different firmware could report chords. Whether they would be reliable depends on the matrix
+having a diode per key, which the firmware cannot tell us. Without diodes, three keys forming a
+rectangle "ghost" a fourth.
 
 Also ruled out:
 
@@ -446,5 +477,13 @@ Disassembling `Transport::setLedBrightness`, `::setLedColor`, `::setSingleLedCol
 `::resetLedColor` showed each building a 10 byte header and passing it to the same transport as
 every other command. The string table in the same binary yielded the full command list, including
 the six unexplored commands above.
+
+`APPNEW` is not in that string table. It came from the vendor's firmware updater
+(`UpDateToolV3.exe`, shipped with VSD Craft): disassembling the code around its "send UpdateMode"
+log line showed it building `CRT\0\0APPNEW` for `hid_write`. It was then verified on hardware.
+
+The key scan description in §7 comes from disassembling the RISC-V code in the vendor's
+publicly downloadable `V3.VSDM18.02.015` firmware image. It describes behaviour only; no vendor
+code is reproduced here.
 
 No opcode guessing against firmware was involved.
