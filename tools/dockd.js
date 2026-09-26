@@ -101,7 +101,7 @@ const watchForDock = () => StreamDock.watch(connected => {
   owned.strip = false;
   showStatus(hub.size > 0 ? 'ready' : 'waiting');
 
-  connected.on('key', ev => broadcast({ type: 'key', index: ev.index, state: ev.state, aux: !!ev.aux }));
+  connected.on('key', ev => broadcast({ type: 'key', index: ev.index, state: ev.state, aux: !!ev.aux, ...(ev.synthetic && { synthetic: true }) }));
 
   // Sketches need to know the panel went blank, so they can repaint. The
   // daemon deliberately does NOT remember and replay their keys: it has no way

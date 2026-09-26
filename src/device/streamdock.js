@@ -52,7 +52,9 @@ const CLEAR_ALL = 0xff;
 
 /**
  * Emits:
- *   'key'   { index, keyId, state, aux }  index is -1 if the id is unknown
+ *   'key'   { index, keyId, state, aux }  index is -1 if the id is unknown.
+ *           On disconnect, every key still down gets an up with
+ *           synthetic: true, so nothing stays stuck down.
  *   'input' Buffer                        every raw input report
  *   'error' Error
  */
@@ -61,6 +63,14 @@ export class StreamDock extends EventEmitter {
   #ledFrame = null; // last frame sent, so a zone write can leave the other zones alone
   #closed = false;
   #heartbeat = null;
+  #held = new Set(); // indices currently down, as far as the reports tell us
+
+  /**
+   * True once a key went down while another was still held. The stock
+   * firmware never does that (PROTOCOL.md §7), so this doubles as detection of
+   * rollover-capable firmware without needing its version string.
+   */
+  rolloverSeen = false;
 
   /** Last brightness we set, so a keepalive can re-assert it. */
   brightness = 80;
@@ -79,6 +89,7 @@ export class StreamDock extends EventEmitter {
       // letting it take the process down.
       this.#closed = true;
       this.stopKeepalive();
+      this.#releaseAll();
       this.emit('disconnect', err);
     });
   }
@@ -205,14 +216,30 @@ export class StreamDock extends EventEmitter {
     if (!keyId) return;
 
     // NOTE: input uses inputKeyIds, output uses imageKeyIds. They differ.
-    const index = this.model.inputKeyIds.indexOf(keyId);
+    const gridIndex = this.model.inputKeyIds.indexOf(keyId);
     const auxIndex = this.model.auxKeyIds.indexOf(keyId);
-    this.emit('key', {
-      index: index >= 0 ? index : auxIndex >= 0 ? this.model.keyCount + auxIndex : -1,
-      keyId,
-      state,
-      aux: auxIndex >= 0,
-    });
+    const index = gridIndex >= 0 ? gridIndex : auxIndex >= 0 ? this.model.keyCount + auxIndex : -1;
+    if (index >= 0) {
+      if (state && this.#held.size > 0 && !this.#held.has(index)) this.rolloverSeen = true;
+      if (state) this.#held.add(index);
+      else this.#held.delete(index);
+    }
+    this.emit('key', { index, keyId, state, aux: auxIndex >= 0 });
+  }
+
+  /** Indices of the keys currently down, ascending. */
+  get held() {
+    return [...this.#held].sort((a, b) => a - b);
+  }
+
+  /** Emits an up for every key still down, e.g. when the device goes away. */
+  #releaseAll() {
+    for (const index of this.held) {
+      this.#held.delete(index);
+      const aux = index >= this.model.keyCount;
+      const keyId = aux ? this.model.auxKeyIds[index - this.model.keyCount] : this.model.inputKeyIds[index];
+      this.emit('key', { index, keyId, state: 0, aux, synthetic: true });
+    }
   }
 
   // --- session --------------------------------------------------------------

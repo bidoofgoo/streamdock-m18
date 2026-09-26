@@ -106,6 +106,9 @@ Daemon to client, one JSON object per line.
 Every press produces a matching release. Verified on hardware across all 18 buttons: no dropped
 edges, no phantom repeats, no stuck keys.
 
+If the dock drops off the bus while keys are held, dockd sends an up for each of them with
+`"synthetic":true` before the `offline` message, so a client never keeps a note or action stuck on.
+
 **Only one key is ever down.** The dock's firmware has no rollover. While a key is held, a press on
 any other key is not reported at all, and it is lost rather than queued. The one exception is a key
 still held when the first is released: it arrives then, as a down, about 40ms later. So you will
