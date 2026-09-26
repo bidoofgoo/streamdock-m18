@@ -303,7 +303,7 @@ rectangle "ghost" a fourth.
 
 The [streamdock-m18-firmware](https://github.com/bidoofgoo/streamdock-m18-firmware) patch
 replaces that scan on `V3.VSDM18_HXJDF.02.020`. A patched dock reports its version as
-**`V3.VSDM18_HXJDF.02.420`** and sends one event per key that changes, for any number of keys.
+**`V3.VSDM18_HXJDF.02.420`** and sends one event per key that changes, for several keys at once (see the column limit below).
 The report format is unchanged, so nothing on the host side needs to change.
 
 VERIFIED 2026-09-26 on hardware, patched unit:
@@ -312,9 +312,11 @@ VERIFIED 2026-09-26 on hardware, patched unit:
   reported, released in any order.
 - **The matrix has no diodes.** The patch keeps phantom keys out by driving idle rows high, as
   the stock scan does. The cost is on keys sharing a column (above each other, e.g. `0x02` and
-  `0x07`): an "up" there can arrive late, once the column clears, and a lower key pressed while
-  an upper one is held may only appear once the upper one is released. Keys in different columns
-  are unaffected.
+  `0x07`): those keys interfere through the shared column. The firmware holds back an "up"
+  there briefly (up to 100ms, or until the column clears when one key is hiding the other) to
+  keep false releases out. One case the hardware cannot see: with a lower key held (e.g. `0x0c`),
+  the keys above it in that column (`0x02`, `0x07`) usually do not register at all; the other
+  order works. Keys in different columns are unaffected.
 - Keys are scanned every 10ms and a change is reported once it reads the same on two scans.
 
 `rolloverSeen` in the driver becomes true as soon as a key goes down while another is held,
