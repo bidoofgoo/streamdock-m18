@@ -132,8 +132,9 @@ SoC inside. Nothing is written to flash. The firmware only records a reboot reas
 and a plain unplug and replug boots the normal firmware again.
 
 This is the command the vendor's firmware updater sends before flashing. In upgrade mode the dock
-speaks ArtInChip's upgrade protocol, not this one. [FIRMWARE-BACKUP.md](FIRMWARE-BACKUP.md)
-uses it to read the whole flash.
+speaks ArtInChip's upgrade protocol, not this one. The
+[firmware backup](https://github.com/bidoofgoo/streamdock-m18-firmware/blob/main/BACKUP.md) in
+streamdock-m18-firmware uses it to read the whole flash.
 
 ### Commands seen but not explored
 
