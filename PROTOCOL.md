@@ -310,9 +310,11 @@ VERIFIED 2026-09-26 on hardware, patched unit:
 
 - Up to **11 keys held at once** (8 display keys and all 3 aux buttons), every down and up
   reported, released in any order.
-- **No ghosting:** rectangle chords such as `0x01` + `0x02` + `0x06` + `0x07` report exactly
-  those four keys, and holding three corners never makes the fourth appear. The M18's matrix has
-  a diode per key.
+- **The matrix has no diodes.** The patch keeps phantom keys out by driving idle rows high, as
+  the stock scan does. The cost is on keys sharing a column (above each other, e.g. `0x02` and
+  `0x07`): an "up" there can arrive late, once the column clears, and a lower key pressed while
+  an upper one is held may only appear once the upper one is released. Keys in different columns
+  are unaffected.
 - Keys are scanned every 10ms and a change is reported once it reads the same on two scans.
 
 `rolloverSeen` in the driver becomes true as soon as a key goes down while another is held,
