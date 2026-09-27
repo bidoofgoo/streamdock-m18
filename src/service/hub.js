@@ -91,6 +91,8 @@ export function createHub({ getDock, log = () => {}, onApplied = () => {}, onCli
       send(client, {
         type: 'hello',
         protocol: 1,
+        // additions within protocol 1 that a client can check for
+        features: ['multilineLabels'],
         attached: true,
         ...(dock ? { state: 'online', ...describe(dock) } : { state: 'offline' }),
       });

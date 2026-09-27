@@ -84,12 +84,15 @@ export function drawTextTile(ctx, text, { width, height, color = '#1f2933', text
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // wrap on a space so two-word labels stay legible on a 64px key
+  // an explicit "\n" sets the lines, three at most (a fourth won't fit a 64px
+  // key legibly); otherwise wrap on a space so two-word labels stay legible
   const words = String(text).split(' ');
-  const lines = words.length > 1 && width < 96 ? [words[0], words.slice(1).join(' ')] : [String(text)];
+  const lines = String(text).includes('\n') ? String(text).split('\n').slice(0, 3)
+    : words.length > 1 && width < 96 ? [words[0], words.slice(1).join(' ')] : [String(text)];
 
-  fitFont(ctx, lines.reduce((a, b) => (a.length > b.length ? a : b), ''), width, Math.round(height * 0.26), fontFamily);
-  const lineHeight = height * 0.24;
+  const three = lines.length > 2;
+  fitFont(ctx, lines.reduce((a, b) => (a.length > b.length ? a : b), ''), width, Math.round(height * (three ? 0.22 : 0.26)), fontFamily);
+  const lineHeight = height * (three ? 0.25 : 0.24);
   const top = height / 2 - ((lines.length - 1) * lineHeight) / 2;
   lines.forEach((line, i) => ctx.fillText(line, width / 2, top + i * lineHeight));
 }

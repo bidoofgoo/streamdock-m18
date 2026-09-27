@@ -36,7 +36,7 @@ if you must, but there is no authentication of any kind.
 On connect you immediately get a `hello`:
 
 ```json
-{"type":"hello","protocol":1,"attached":true,"state":"online",
+{"type":"hello","protocol":1,"features":["multilineLabels"],"attached":true,"state":"online",
  "device":"VSDinside Stream Dock M18 (15 keys + 3)",
  "keys":15,"aux":3,"keyWidth":64,"keyHeight":64,"maxImageBytes":10240,
  "leds":24,"ledZones":["ring","front","dark"],
@@ -47,6 +47,9 @@ On connect you immediately get a `hello`:
 the LED zone names all come from the device profile, so a client that reads them works on a
 related model without changes. `state` is `online` or `offline`; a client can connect before the
 dock is plugged in.
+
+`features` lists additions made within protocol 1, so a client can use them and still work with
+an older dockd. Missing means none. So far: `multilineLabels` (a `\n` in a key label, below).
 
 ## Coordinates
 
@@ -68,7 +71,7 @@ match responses to requests.
 
 | Command | Effect |
 |---|---|
-| `{"cmd":"key","index":0,"label":"Rain"}` | render a text label on a key. `color` and `textColor` are optional hex strings |
+| `{"cmd":"key","index":0,"label":"Rain"}` | render a text label on a key. `color` and `textColor` are optional hex strings. A `\n` in the label sets the lines, three at most (needs `multilineLabels`); otherwise it wraps on the first space |
 | `{"cmd":"keyImage","index":0,"jpeg":"<base64>"}` | your own artwork. **Read the warning below** |
 | `{"cmd":"clear"}` | blank every key |
 | `{"cmd":"clear","index":3}` | blank one key |
